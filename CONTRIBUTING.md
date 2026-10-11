@@ -4,6 +4,66 @@ Kernel work here is a patch series against [aurora-silicon/linux](https://github
 
 The main thing this project needs is **results from more Macs**, above all sending from a BCM4378 (`14e4:4425`) or BCM4388 (`14e4:4434`). Receiving is confirmed on all three chips, but sending only on the BCM4387 (`14e4:4433`). Nothing in the patches gates on a chip id, so the module builds and loads anywhere `brcmfmac` does; what differs is whether the firmware accepts an AWDL interface. Report `lspci -nn | grep -i network` with any outcome, working or not.
 
+## What a pull request needs
+
+The firmware's behaviour differs by chip and firmware version, and reviewers can rarely reproduce yours, so a pull request is reviewed on the evidence it includes.
+
+### The problem
+
+- What happened, and what you expected instead.
+- How often it happens: for example, "awdl0 creation failed in 3 of 10 cycles".
+- Which claims you measured and which you inferred. "The firmware drops the frame" needs a log line. Without one, say it's a guess.
+
+### Your setup
+
+Paste the whole output of this command, the same one the hardware-report issue form asks for:
+
+```bash
+{ tr -d '\0' < /proc/device-tree/model; echo; lspci -nn | grep -i network; uname -r; pacman -Q brcmfmac-awdl-dkms; omdrop --version; journalctl -k -b | grep -m1 'brcmfmac.*Firmware:'; ip -br link show awdl0; } 2>&1
+```
+
+Also give each Apple device involved, with its model, OS version, and AirDrop visibility (Everyone or Contacts Only).
+
+### Evidence from real hardware
+
+Show the behaviour before and after the change on the hardware you describe. Paste text, not screenshots, and include the lines that show the behaviour.
+
+| What changed | Where to get the evidence |
+|---|---|
+| A receive window, peers, or the data-path gate | `/run/awdl-discoverable/log` during the window, and `pkexec /usr/lib/omdrop/omdrop-discoverable status --json` |
+| The firmware peer table | `pkexec /usr/lib/omdrop/omdrop-discoverable peers` |
+| Frame delivery | `journalctl -k` with `pkexec /usr/lib/omdrop/omdrop-discoverable trace on`. `tx_status=0x0000` is an acknowledged frame; `0x0003` is a frame the firmware dropped |
+| Link counters | `pkexec /usr/lib/omdrop/omdrop-discoverable diag 10` |
+| The kernel module | `journalctl -k -b` from module load, including any warning or oops |
+
+### Tests
+
+- Run the commands under [Testing](#testing) on current `main` and on your branch. Report both results.
+- Name every test that fails, and say whether it also fails on `main`.
+- Add a regression test that fails without your change and passes with it. A test must not depend on the machine it runs on.
+
+### Root helper changes
+
+`/usr/lib/omdrop/omdrop-discoverable` runs as root, and polkit lets any user in an active local session run it without a password. Treat every argument, environment variable, and file it reads as input from an unprivileged user. For a change to the helper, explain:
+
+- What a hostile local user can do with the new input: for example, pass a value that reaches shell arithmetic, a path, or a firmware command.
+- How the input is validated before it's used.
+- Which files it reads or writes as root, and whether the user controls any of those paths.
+
+### Your branch
+
+- Base it on current `main`, and rebase when `main` moves. Git can merge two changes to the same file without a conflict and still break both, so run the tests again after rebasing.
+- Make one change per pull request.
+- Author your commits as yourself. For kernel patches, follow the authorship rules below.
+
+### Before you share logs
+
+Logs can identify people and networks. Before posting:
+
+- **Remove device names and contact details.** That includes names, Apple ID email addresses, and phone numbers.
+- **Remove network identifiers.** The kernel log can show your Wi-Fi MAC address, and your network's name and BSSID. AWDL addresses rotate every few minutes and are fine to share.
+- **Never share identity material.** That includes anything in `~/.omdrop/keys`, `validation_record.cms`, and 1Password items.
+
 ## Kernel changes: send commits, not edited patch files
 
 `patches/*.patch` are `git format-patch` output. Editing one of those files in a GitHub PR puts **your** name on the commit in this repository, but the patch's own `From:` header is what survives into the kernel tree — and that header names the original author. Merge such a PR and your work is applied upstream under somebody else's name. That is a property of `git am`, not a slight.
