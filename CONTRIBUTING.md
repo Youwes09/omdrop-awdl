@@ -30,7 +30,7 @@ Show the behaviour before and after the change on the hardware you describe. Pas
 
 | What changed | Where to get the evidence |
 |---|---|
-| A receive window, peers, or the data-path gate | `/run/awdl-discoverable/log` during the window, and `pkexec /usr/lib/omdrop/omdrop-discoverable status --json` |
+| A receive window, peers, or the data-path gate | `/run/awdl-discoverable/log` during the window, and `/usr/lib/omdrop/omdrop-discoverable status --json`, which needs no root |
 | The firmware peer table | `pkexec /usr/lib/omdrop/omdrop-discoverable peers` |
 | Frame delivery | `journalctl -k` with `pkexec /usr/lib/omdrop/omdrop-discoverable trace on`. `tx_status=0x0000` is an acknowledged frame; `0x0003` is a frame the firmware dropped |
 | Link counters | `pkexec /usr/lib/omdrop/omdrop-discoverable diag 10` |
@@ -153,4 +153,4 @@ tests/check-patch-drift          # do the patches still apply to a newer Asahi t
 python3 -m unittest discover -s tests -q
 ```
 
-A hardware change needs a note in the PR saying what you measured it on: the chip id, the kernel, and what you observed. "Works" is not reproducible.
+A hardware change also needs the setup output and evidence described in [What a pull request needs](#what-a-pull-request-needs). "Works" is not reproducible.
