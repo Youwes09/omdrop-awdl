@@ -69,6 +69,52 @@ class SupervisorLifecycleTests(unittest.TestCase):
             {str(first.pid), str(second.pid)},
         )
 
+    def test_stop_waits_for_a_supervisor_still_tearing_down(self):
+        # A TERMed supervisor runs its teardown before exiting. stop used to
+        # return after a fixed second, so a start right after it raced the old
+        # supervisor's teardown and lost its window.
+        self.helper.write_text(
+            "#!/usr/bin/env bash\n"
+            "trap 'sleep 2; exit 0' TERM\n"
+            "while :; do sleep 0.1 & wait $!; done\n")
+        supervisor = self.spawn("__supervise", "0", "0")
+
+        started = time.monotonic()
+        result = self.run_fragment(
+            f"kill -TERM {supervisor.pid}; wait_supervisors_gone")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreaterEqual(time.monotonic() - started, 1.5)
+        self.assertIsNotNone(supervisor.poll())
+
+    def test_the_supervisor_acts_on_term_during_its_interval_sleep(self):
+        # bash defers a trap until the foreground command ends, so a TERM
+        # arriving during the interval sleep used to wait out the whole sleep
+        # -- long enough for a new window to start and be torn down by it.
+        source = DISCOVERABLE.read_text()
+        start = source.index("supervise(){")
+        supervise = source[start:source.index("\n}\n", start) + 3]
+        (self.run / "until").write_text("0")
+        harness = f'''
+set -uo pipefail
+RUN={self.run} IF=awdl0 LIB=/nonexistent CONF=/nonexistent ADV_FLAGS=0
+ADV_COUNT=1 ADV_INTERVAL=30
+log(){{ :; }}; spawn(){{ :; }}; python3(){{ :; }}; ip(){{ :; }}
+track_election(){{ :; }}; rx_watch(){{ :; }}; mdns_reclaim(){{ :; }}
+kill_children(){{ :; }}; is_duration(){{ :; }}; is_uint(){{ [[ $1 =~ ^[0-9]+$ ]]; }}
+now(){{ date +%s; }}
+{supervise}
+supervise 0 0
+'''
+        process = subprocess.Popen(["bash", "-c", harness])
+        self.processes.append(process)
+        time.sleep(1)
+
+        process.terminate()
+
+        self.assertEqual(process.wait(timeout=5), 0)
+        self.assertEqual((self.run / "reason").read_text(), "stopped")
+
 
 if __name__ == "__main__":
     unittest.main()
