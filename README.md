@@ -4,7 +4,7 @@ AWDL protocol activation for Apple Silicon Macs on Linux: fourteen patches to `b
 
 AWDL (Apple Wireless Direct Link) is the link layer AirDrop and AirPlay run over. These patches expose the Wi-Fi firmware's own AWDL implementation as an `awdl0` interface, instead of reimplementing the protocol in userspace.
 
-This is the driver half of [Omdrop](https://github.com/brentkearney/omdrop-plugin), AirDrop for [Omarchy M](https://github.com/omacom/omarchy-mac). The functional patches are merged into `aurora-wip`, the development branch of Omarchy's `linux-aurora` kernel ([aurora-silicon/linux#24](https://github.com/aurora-silicon/linux/pull/24)). The trace fix is proposed in [#213](https://github.com/aurora-silicon/linux/pull/213). Until a `linux-aurora` release ships both, the Omdrop plugin builds these patches as a DKMS module.
+This is the radio backend [Omdrop](https://github.com/brentkearney/omdrop-plugin) uses on Apple Silicon Macs running [Omarchy M](https://github.com/omacom/omarchy-mac). On PCs with other Wi-Fi cards, Omdrop 0.16.0 and later runs over [omdrop-owl](https://github.com/t4t5/omdrop-owl) instead, which implements AWDL in software. The two packages conflict, so a computer has one or the other. The functional patches are merged into `aurora-wip`, the development branch of Omarchy's `linux-aurora` kernel ([aurora-silicon/linux#24](https://github.com/aurora-silicon/linux/pull/24)). The trace fix is proposed in [#213](https://github.com/aurora-silicon/linux/pull/213). Until a `linux-aurora` release ships both, the Omdrop plugin builds these patches as a DKMS module.
 
 - [Install](#install)
 - [What the package installs](#what-the-package-installs)
@@ -204,7 +204,9 @@ An open window costs 71 mW (95% CI 59.8–82.5), measured on an M1 Pro over 5.6 
 
 List your Wi-Fi hardware by running `lspci -nn | grep -i network`. BCM4378 is `14e4:4425`, BCM4387 is `14e4:4433`, and BCM4388 is `14e4:4434`.
 
-The patches configure AWDL the firmware already implements, so they only work on Apple's Broadcom Wi-Fi, not on Intel, MediaTek, or Qualcomm cards. For AirDrop on other hardware, see [OpenDrop](https://github.com/seemoo-lab/opendrop) and [owl](https://github.com/seemoo-lab/owl).
+The patches configure AWDL the firmware already implements, so they only work on Apple's Broadcom Wi-Fi, not on Intel, MediaTek, or Qualcomm cards. For those, use [omdrop-owl](https://github.com/t4t5/omdrop-owl); its [Supported hardware](https://github.com/t4t5/omdrop-owl#supported-hardware) table lists the cards that work with Omdrop.
+
+Intel-based Macs also have Broadcom Wi-Fi, but this package doesn't support them: it builds only for `aarch64`, against `linux-asahi-headers`. They are untested with either backend.
 
 ### Known to work
 
