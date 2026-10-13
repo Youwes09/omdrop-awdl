@@ -639,7 +639,11 @@ supervise(){
     if (( seq % 10 == 1 )); then mdns_reclaim; fi
     python3 "$LIB/awdl-airdrop-adv.py" --iface "$IF" --count "$ADV_COUNT" \
       --interval 0.02 --flags "$ADV_FLAGS" --seq $(( seq * 100 )) >/dev/null 2>&1
-    sleep "$ADV_INTERVAL"
+    # In the background with `wait`, so a TERM runs the trap at once. bash
+    # defers a trap until the foreground command ends: with a plain sleep, a
+    # stop followed quickly by a start let this supervisor's trap fire seconds
+    # later and tear down the new window.
+    sleep "$ADV_INTERVAL" & wait $!
   done
   log "window expired"
   kill_children
@@ -700,6 +704,17 @@ supervisor_alive(){
   while read -r owned; do
     [[ $owned == "$recorded" ]] && return 0
   done < <(supervisor_pids)
+  return 1
+}
+
+# A TERMed supervisor still runs its teardown (kill_children alone takes a
+# second), so "signalled" is not "gone". Poll until none is left, up to 10 s.
+wait_supervisors_gone(){
+  local i
+  for (( i = 0; i < 50; i++ )); do
+    [[ -z $(supervisor_pids) ]] && return 0
+    sleep 0.2
+  done
   return 1
 }
 
@@ -895,7 +910,16 @@ cmd_stop(){
   while read -r p; do
     [[ -n ${p:-} ]] && kill -TERM "$p" 2>/dev/null
   done < <(supervisor_pids)
-  sleep 1
+  # Return only once they are gone: a supervisor's teardown landing after
+  # this stop would take down a window started right after it (the old fixed
+  # 1 s wait was shorter than the supervisor's 6 s interval sleep).
+  if ! wait_supervisors_gone; then
+    while read -r p; do
+      [[ -n ${p:-} ]] && kill -KILL "$p" 2>/dev/null
+    done < <(supervisor_pids)
+    kill_children
+    log "a supervisor ignored TERM for 10 s; killed it"
+  fi
   # A `start` still in its gate phase owns no supervisor and no pids file, but
   # it is toggling `awdl=0/1` -- so "stop" has to mean that too, or a stuck gate
   # keeps cycling the radio after the user has switched the button off.
